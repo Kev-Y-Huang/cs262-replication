@@ -23,7 +23,7 @@ python3 -m unittest tests.py
 
 ## Project Directory Structure
 ```
-cs262-base-implementation
+cs262-replication
 ├───.gitignore          # gitignore file
 ├───tests.py            # Unit tests
 ├───NOTEBOOK.md         # Engineering Notebook containing design decisions
