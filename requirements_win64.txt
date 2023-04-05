@@ -1,0 +1,25 @@
+# This file may be used to create an environment using:
+# $ conda create --name <env> --file <this file>
+# platform: win-64
+ca-certificates=2023.01.10=haa95532_0
+certifi=2022.12.7=py39haa95532_0
+coverage=6.3.2=py39h2bbff1b_0
+cython=0.29.32=py39hd77b12b_0
+grpcio=1.35.0=py39hc60d5dd_1
+grpcio-tools=1.35.0=py39hd77b12b_1
+libprotobuf=3.20.3=h23ce68f_0
+openssl=1.1.1t=h2bbff1b_0
+pip=22.3.1=py39haa95532_0
+protobuf=3.20.3=py39hd77b12b_0
+python=3.9.16=h6244533_0
+pyyaml=6.0=py39h2bbff1b_1
+setuptools=65.6.3=py39haa95532_0
+six=1.16.0=pyh6c4a22f_0
+sqlite=3.40.1=h2bbff1b_0
+tzdata=2022g=h04d1e81_0
+vc=14.2=h21ff451_1
+vs2015_runtime=14.27.29016=h5e58377_2
+wheel=0.38.4=py39haa95532_0
+wincertstore=0.2=py39haa95532_2
+yaml=0.2.5=he774522_0
+zlib=1.2.13=h8cc25b3_0
