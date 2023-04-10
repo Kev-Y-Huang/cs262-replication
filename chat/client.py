@@ -62,7 +62,6 @@ class Client:
                 self.server = None
                 self.dest = (self.dest + 1) % len(MACHINES)
 
-        print(f"new input {self.dest}")
         self.inputs.append(self.server)
         output = pack_packet(self.username, 7, "")
         self.server.send(output)

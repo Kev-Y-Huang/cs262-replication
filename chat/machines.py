@@ -2,10 +2,8 @@ from typing import List
 
 class Machine:
     """
-    A class that represents the identity of a machine. Most crucially
-    this stores information about which ip/port the machine is listening
-    on, as well as which other machines it is responsible for connecting
-    to.
+    A class that represents the identity of a machine. Stores information about which 
+    ip/port the machine is listening on and what machines it connects to.
     """
 
     def __init__(

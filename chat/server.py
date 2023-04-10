@@ -50,6 +50,8 @@ class Server:
             while True:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(FREQUENCY)
+                # Ping the servers every FREQUENCY seconds to check if they are still alive
+                # using the heart port
                 try:
                     sock.connect((backup.ip, backup.heart_port))
                     sock.send("ping".encode(encoding='utf-8'))
@@ -120,7 +122,7 @@ class Server:
 
     def broadcast_update(self, username: str, op_code: int, contents: str):
         """
-        Takes care of state-updates.
+        Takes care of state-updates, broadcast the message to all other servers in the system
         """
         if not self.is_leader:
             return
@@ -131,7 +133,7 @@ class Server:
     
     def listen_internal(self):
         """
-        Listens to the other servers for state updates
+        Listens to the other servers to get state updatesfrom the systems
         """
         self.internal_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.internal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -242,6 +244,7 @@ class Server:
                 # logging.info((user.get_name(), op_code, contents))
                 responses = self.chat_app.handler(user, op_code, contents)
                 
+                # Check for only valid op_codes
                 if 7 > op_code > 0:
                     # write user, op_code, contents to csv file
                     with open(f'./chat/logs/{self.server_number}.csv', 'a', newline='') as csv_file:
