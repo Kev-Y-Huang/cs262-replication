@@ -45,6 +45,7 @@ class Client:
         """
         Attempts to connect to the server at the given host and port.
         """
+        self.server = None
         while not self.server and self.client_running:
             machine = MACHINES[self.dest]
             try:
@@ -60,9 +61,10 @@ class Client:
             finally:
                 self.dest = (self.dest + 1) % len(MACHINES)
 
-        if self.server:
-            self.inputs.append(self.server)
-    
+        print("new input")
+        self.inputs.append(self.server)
+        output = pack_packet(self.username, 7, "")
+        self.server.send(output)
     
     def receive_messages(self):
         try:
@@ -88,8 +90,6 @@ class Client:
             # Close all socket connections
             for sock in self.inputs:
                 sock.close()
-        
-
 
     def send_user_input(self):
         # Continuously listen for user inputs in the terminal

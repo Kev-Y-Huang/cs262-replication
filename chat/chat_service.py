@@ -93,7 +93,9 @@ class Chat:
         content: str, optional
             Contents of the request
         """
-        if op_code == 0:
+        if op_code == 7:
+            return self.connect_to_thread(user, content)
+        elif op_code == 0:
             return self.list_accounts(user, content)
         elif op_code == 1:
             return self.create_account(user, content)
@@ -118,6 +120,10 @@ class Chat:
         else:
             return [(user.get_conn(), user.get_name(), "<server> Operation not permitted. You are not logged in.")]
 
+    def connect_to_thread(self, user: User, _):
+        self.online_users[user.get_name()] = user.get_conn()
+        return [(user.get_conn(), user.get_name(), f"<server> Connected to thread.")]
+    
     def list_accounts(self, user: User, exp: str = "\S*") -> list[Response]:
         """
         List all accounts on the chat server
@@ -244,7 +250,7 @@ class Chat:
 
         # Checks if the user is logged in or exists
         if to_logout not in self.accounts or to_logout not in self.online_users:
-            return [(conn, f"<server> Failed to logout. You are not logged in, or account \"{to_logout}\" does not exist.")]
+            return [(conn, "", f"<server> Failed to logout. You are not logged in, or account \"{to_logout}\" does not exist.")]
 
         # Deletes the user from the online users
         self.lock.acquire()
