@@ -4,14 +4,25 @@
 print("****************************************")
 print("***** Testing the wire protocol... *****")
 print("****************************************")
-from wire.wire_protocol import pack_packet, unpack_packet
-import time
+from wire_protocol import pack_packet, unpack_packet
 
+username = "user1"
 operation = 1
-data = "Hello, World!"
-packet = pack_packet(operation, data)
-unpacked_operation, unpacked_data = unpack_packet(packet)
+data = "Hello, user1!"
+packet = pack_packet(username, operation, data)
+unpacked_username, unpacked_operation, unpacked_data = unpack_packet(packet)
 
+assert username == unpacked_username
+assert operation == unpacked_operation
+assert data == unpacked_data
+
+username = ""
+operation = 2
+data = "Hello, ____!"
+packet = pack_packet(username, operation, data)
+unpacked_username, unpacked_operation, unpacked_data = unpack_packet(packet)
+
+assert username == unpacked_username
 assert operation == unpacked_operation
 assert data == unpacked_data
 
@@ -26,7 +37,7 @@ print("*****************************************")
 print("*************************************************")
 print("***** Testing the wire protocol chat app... *****")
 print("*************************************************")
-from wire.chat_service import Chat, User
+from chat_service import Chat, User
 
 chat_app = Chat()
 
