@@ -41,6 +41,18 @@ class Server:
 
         self.backups = get_other_machines(server_number)
 
+    def setup_connections(self):
+        """
+        Sets up the connections to the other servers
+        """
+        for backup in self.backups:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            while sock.connect_ex((backup.ip, backup.heart_port)) != 0:
+                logging.info(f"Heart Port Failed for {backup.id}")
+                time.sleep(1)
+        
+        logging.info("Success")
+
 
     def instantiate_from_csv(self):
         """
@@ -86,26 +98,21 @@ class Server:
     def broadcast_update(self, user, op_code, contents):
         """
         Takes care of state-updates.
-        NOTE: We let this be called on any kind of request, but notice
-        that we only have to actually do stuff on account changes or messages
-        NOTE: If this machine does not have `is_primary` we'll do nothing
         """
         if not self.is_leader:
             return
         for backup in self.backups:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            conn.connect((backup.ip, backup.client_port))
+            conn.connect((backup.ip, backup.internal_port))
             conn.send(pack_packet(user, op_code, contents))
-
-            
     
-    def listen_heartbeat(self):
-        self.health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.health_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.health_socket.bind((self.machine.ip, self.machine.health_port))
-        self.health_socket.listen(5)
+    def listen_internal(self):
+        self.internal_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.internal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.internal_socket.bind((self.machine.ip, self.machine.internal_port))
+        self.internal_socket.listen(5)
 
-        inputs = [server.health_socket]
+        inputs = [server.internal_socket]
 
         try:
             while self.thread_running:
@@ -113,45 +120,75 @@ class Server:
 
                 for sock in read_sockets:
                     # If the socket is the server socket, accept as a connection
-                    if sock == self.health_socket:
+                    if sock == self.internal_socket:
                         client, _ = sock.accept()
                         inputs.append(client)
                     # Otherwise, read the data from the socket
                     else:
-                        print(sock.recv(1024))
-                        sock.send("ping".encode(encoding='utf-8'))
+                        data = sock.recv(1024)
+                        if data:
+                            op_code, contents = unpack_packet(data)
+                            self.queue.put((curr_user, int(op_code), contents))
+                        # If there is no data, then the connection has been closed
+                        else:
+                            sock.close()
+                            inputs.remove(sock)
         except Exception as e:
             print(e)
             for conn in inputs:
                 conn.close()
-            self.health_socket.close()
+            self.heart_socket.close()
+    
+    def listen_heartbeat(self):
+        self.heart_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.heart_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.heart_socket.bind((self.machine.ip, self.machine.heart_port))
+        self.heart_socket.listen(5)
+
+        inputs = [server.heart_socket]
+
+        try:
+            while self.thread_running:
+                read_sockets, _, _ = select.select(inputs, [], [], 0.1)
+
+                for sock in read_sockets:
+                    # If the socket is the server socket, accept as a connection
+                    if sock == self.heart_socket:
+                        client, _ = sock.accept()
+                        inputs.append(client)
+                    # Otherwise, read the data from the socket
+                    else:
+                        data = sock.recv(1024)
+                        if data:
+                            sock.send("ping".encode(encoding='utf-8'))
+                        # If there is no data, then the connection has been closed
+                        else:
+                            sock.close()
+                            inputs.remove(sock)
+        except Exception as e:
+            print(e)
+            for conn in inputs:
+                conn.close()
+            self.heart_socket.close()
 
     def elect_leader(self):
-        print("test")
         for backup in self.backups:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(FREQUENCY)
-            logging.info(f"Backup {backup.id} assessing")
             try:
-                sock.connect((backup.ip, backup.health_port))
+                sock.connect((backup.ip, backup.heart_port))
                 sock.send("ping".encode(encoding='utf-8'))
                 sock.recv(2048)
                 sock.close()
             except:
-                # TODO deal with error messaging
-                logging.info(f"Backup {backup.id} is dead")
-                # self.backups.remove(backup)
+                logging.info(f"Backup {backup.id} is not up")
+                self.backups.remove(backup)
                 pass
 
         if not self.is_leader:
             if len(self.backups) == 0 or self.server_number < min([server.id for server in self.backups]):
                 self.is_leader = True
-                logging.info("Elected leader")
-
-                # # TODO figure out takeover stuff
-                # print(f"Machine {self.identity.name} is now primary!")
-                # takeover_req = TakeoverRequest()
-                # self.internal_requests.put(takeover_req)
+                logging.info(f"{self.server_number} is elected leader")
 
     def send_heartbeat(self):
         time.sleep(FREQUENCY)
@@ -164,16 +201,15 @@ class Server:
             if not self.queue.empty():
                 user, op_code, contents = self.queue.get()
                 responses = self.chat_app.handler(user, op_code, self.server_number, contents)
-                self.broadcast_update(user, op_code, contents)
-
+                
                 # write user, op_code, contents to csv file
                 with open(f'{self.server_number}.csv', 'a') as csv_file:
                     csv_writer = csv.writer(csv_file)
                     csv_writer.writerow([user, op_code, contents])
 
-
-
                 if self.is_leader:
+                    # update other servers
+                    self.broadcast_update(user, op_code, contents)
                     # Iterate and send out each new response generated by the server
                     for recip_conn, response in responses:
                         output = pack_packet(1, response)
@@ -191,15 +227,20 @@ if __name__ == "__main__":
     server = Server(args.server_number)
     threads = []
 
-    server.elect_leader()
-
     try:
         threads.append(threading.Thread(target=server.listen_heartbeat))
-        threads.append(threading.Thread(target=server.send_heartbeat))
+        # threads.append(threading.Thread(target=server.send_heartbeat))
         threads.append(threading.Thread(target=server.handle_queue))
         
         for eachThread in threads:
             eachThread.start()
+
+        server.setup_connections()
+        server.elect_leader()
+
+        heartbeat_thread = threading.Thread(target=server.send_heartbeat)
+        heartbeat_thread.start()
+        threads.append(heartbeat_thread)
 
         inputs = [server.server]
         
@@ -212,6 +253,7 @@ if __name__ == "__main__":
                 if server.is_leader:
                     # prints the address of the user that just connected
                     logging.info(addr[0] + " connected.")
+                    conn.send(pack_packet("", 1, "Server is the leader"))
                     # creates a new thread for incoming client
                     new_client = threading.Thread(target=server.handle_client, args=(conn,))
                     new_client.start()
@@ -222,7 +264,7 @@ if __name__ == "__main__":
 
                     conn.send(pack_packet("", 0, "Server is not leader"))
                     conn.close()
-    except KeyboardInterrupt:
+    except:
         logging.info('Stopping Server.')
         server.thread_running = False
 

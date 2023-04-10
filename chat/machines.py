@@ -14,13 +14,13 @@ class Machine:
         ip: str,
         client_port: int,
         internal_port: int,
-        health_port: int
+        heart_port: int
     ) -> None:
         self.id = id
         self.ip = ip
         self.client_port = client_port
         self.internal_port = internal_port
-        self.health_port = health_port
+        self.heart_port = heart_port
 
 
 MACHINE_ZERO = Machine(
@@ -28,7 +28,7 @@ MACHINE_ZERO = Machine(
     ip="localhost",
     client_port=26201,
     internal_port=26202,
-    health_port=26203
+    heart_port=26203
 )
 
 MACHINE_ONE = Machine(
@@ -36,7 +36,7 @@ MACHINE_ONE = Machine(
     ip="localhost",
     client_port=26211,
     internal_port=26212,
-    health_port=26213
+    heart_port=26213
 )
 
 MACHINE_TWO = Machine(
@@ -44,7 +44,7 @@ MACHINE_TWO = Machine(
     ip="localhost",
     client_port=26221,
     internal_port=26222,
-    health_port=26223
+    heart_port=26223
 )
 
 # Create a mapping from machine name to information about it

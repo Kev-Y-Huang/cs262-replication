@@ -1,5 +1,6 @@
 import re
 import socket
+import select
 import sys
 import time
 from threading import *
@@ -18,11 +19,12 @@ ERROR_MSG = """<client> Invalid input string, please use format <command>|<text>
     6|                  -> deliver all unsent messages to current user"""
 
 class Client:
-    def __init__(self, server):
-        self.__server = server
+    def __init__(self):
+        self.__server = None
         self.__username = ""
         self.__thread_running = True
         self.__dest = 0
+        self.__inputs = []
 
     def ping_server(self):
         """
@@ -41,35 +43,60 @@ class Client:
         """
         Attempts to connect to the server at the given host and port.
         """
-
-        while not self.iconn:
-            self.primary_machine = MACHINES[self.__dest]
+        while not self.__server:
+            print("test")
+            machine = MACHINES[self.__dest]
             try:
-                self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.iconn.connect((self.primary_machine.ip,
-                                    self.primary_machine.client_port))
-                data = self.iconn.recv(2048)
-                resp = Response.unmarshal(data.decode())
-                if not resp.success:
-                    raise ValueError("Server is not primary")
+                self.__server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.__server.connect((machine.ip, machine.client_port))
+                user, op, _ = unpack_packet(self.__server.recv(2048))
+                if op == 0:
                     self.iconn = None
+            except KeyboardInterrupt:
+                break
             except Exception as e:
                 self.iconn = None
             self.__dest = (self.__dest + 1) % len(MACHINES)
+
+        print(self.__dest)
+        self.__inputs.append(self.__server)
+    
     
     def receive_messages(self):
         while self.__thread_running:
-            message = self.__server.recv(1024)
-            self.__username, _, data = unpack_packet(message)
-            print(data)
+            # Use select.select to poll for messages
+            read_sockets, _, _ = select.select(self.__inputs, [], [], 0.1)
+
+            for sock in read_sockets:
+                # If the socket is the server socket, accept as a connection
+                if sock == self.__server:
+                    client, _ = sock.accept()
+                    self.__inputs.append(client)
+                # Otherwise, read the data from the socket
+                else:
+                    data = sock.recv(1024)
+                    if data:
+                        # Read in the data as a big-endian integer
+                        self.__username, _, output = unpack_packet(data)
+                        print(output)
+                    # If there is no data, then the connection has been closed
+                    else:
+                        sock.close()
+                        self.__inputs.remove(sock)
+
+        # Close all socket connections
+        for sock in self.__inputs:
+            sock.close()
         
+
+
     def send_user_input(self):
         # Continuously listen for user inputs in the terminal
         while self.__thread_running:
             usr_input = input()
             # Exit program upon quiting
             if usr_input == "quit":
-                break
+                raise KeyboardInterrupt
             # Parse message if non-empty
             elif usr_input != '':
                 # Parses the user input to see if it is a valid input
@@ -93,26 +120,18 @@ class Client:
                             except:
                                 self.__server.close()
                                 self.__server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                                self.__server.connect((IP_ADDRESS, PORTS[(i + 1) % 3]))
+                                machine = MACHINES[(self.__dest + 1) % 3]
+                                self.__server.connect((machine.ip, machine.client_port))
                 else:
                     print(ERROR_MSG)
        
 
 def main():
     i = 0
-    for machine in MACHINES:
-        try:
-            # Setup connection to server socket
-            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server.connect((machine.ip, machine.client_port))
-            output = pack_packet("", 0, "")
-            server.send(output)
-        except OSError:
-            continue
+    client = Client()
 
-    print(machine.id)
+    client.attempt_connection()
 
-    client = Client(server)
     threads = []
 
     try:
