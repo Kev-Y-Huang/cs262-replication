@@ -20,11 +20,11 @@ ERROR_MSG = """<client> Invalid input string, please use format <command>|<text>
 
 class Client:
     def __init__(self):
-        self.__server = None
-        self.__username = ""
-        self.__thread_running = True
-        self.__dest = 0
-        self.__inputs = []
+        self.server = None
+        self.username = ""
+        self.thread_running = True
+        self.dest = 0
+        self.inputs = []
 
     def ping_server(self):
         """
@@ -43,56 +43,55 @@ class Client:
         """
         Attempts to connect to the server at the given host and port.
         """
-        while not self.__server:
-            print("test")
-            machine = MACHINES[self.__dest]
+        while not self.server:
+            machine = MACHINES[self.dest]
             try:
-                self.__server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.__server.connect((machine.ip, machine.client_port))
-                user, op, _ = unpack_packet(self.__server.recv(2048))
+                self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.server.connect((machine.ip, machine.client_port))
+                user, op, _ = unpack_packet(self.server.recv(2048))
                 if op == 0:
                     self.iconn = None
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 self.iconn = None
-            self.__dest = (self.__dest + 1) % len(MACHINES)
+                self.dest = (self.dest + 1) % len(MACHINES)
 
-        print(self.__dest)
-        self.__inputs.append(self.__server)
+        print(self.dest)
+        self.inputs.append(self.server)
     
     
     def receive_messages(self):
-        while self.__thread_running:
+        while self.thread_running:
             # Use select.select to poll for messages
-            read_sockets, _, _ = select.select(self.__inputs, [], [], 0.1)
+            read_sockets, _, _ = select.select(self.inputs, [], [], 0.1)
 
             for sock in read_sockets:
                 # If the socket is the server socket, accept as a connection
-                if sock == self.__server:
+                if sock == self.server:
                     client, _ = sock.accept()
-                    self.__inputs.append(client)
+                    self.inputs.append(client)
                 # Otherwise, read the data from the socket
                 else:
                     data = sock.recv(1024)
                     if data:
                         # Read in the data as a big-endian integer
-                        self.__username, _, output = unpack_packet(data)
+                        self.username, _, output = unpack_packet(data)
                         print(output)
                     # If there is no data, then the connection has been closed
                     else:
                         sock.close()
-                        self.__inputs.remove(sock)
+                        self.inputs.remove(sock)
 
         # Close all socket connections
-        for sock in self.__inputs:
+        for sock in self.inputs:
             sock.close()
         
 
 
     def send_user_input(self):
         # Continuously listen for user inputs in the terminal
-        while self.__thread_running:
+        while self.thread_running:
             usr_input = input()
             # Exit program upon quiting
             if usr_input == "quit":
@@ -109,19 +108,20 @@ class Client:
                         print('<client> Message too long, please keep messages under 280 characters')
                     else:
                         # Pack the op_code and content and send it to the server
-                        output = pack_packet(self.__username, op_code, content)
+                        output = pack_packet(self.username, op_code, content)
                         not_sent = True
                         while not_sent:
                             # Try to send the message to the server
                             try:
-                                self.__server.send(output)
+                                self.server.send(output)
                                 not_sent = False
                             # If the message cannot be sent, connect to new server
                             except:
-                                self.__server.close()
-                                self.__server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                                machine = MACHINES[(self.__dest + 1) % 3]
-                                self.__server.connect((machine.ip, machine.client_port))
+                                print("failure")
+                                self.server.close()
+                                self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                machine = MACHINES[(self.dest + 1) % 3]
+                                self.server.connect((machine.ip, machine.client_port))
                 else:
                     print(ERROR_MSG)
        
@@ -141,10 +141,10 @@ def main():
 
         for eachThread in threads:
             eachThread.start()
-        while client.__thread_running:
+        while client.thread_running:
             continue
     except:
-        client.__thread_running = False
+        client.thread_running = False
         for eachThread in threads:
             eachThread.join()
         sys.exit()

@@ -6,6 +6,7 @@ import sys
 import csv
 import time
 import threading
+import os
 
 from queue import Queue
 
@@ -58,18 +59,27 @@ class Server:
         """
         This function is used to re-instantiate the server from a csv file to its original state
         """
-        with open(f'{self.server_number}.csv', 'r') as csv_file:
-            csv_reader = csv.reader(csv_file)
-            for line in csv_reader:
-                user, op_code, contents = line
-                responses = self.chat_app.handler(user, op_code, contents)
+        # if file does not exist, create empty csv file
+        if not os.path.exists(f'{self.server_number}.csv'):
+            with open(f'{self.server_number}.csv', 'w') as csv_file:
+                csv_writer = csv.writer(csv_file)
+                # write empty row
+                csv_writer.writerow([])
+        else:
+            with open(f'{self.server_number}.csv', 'r') as csv_file:
+                csv_reader = csv.reader(csv_file)
+                for line in csv_reader:
+                    user, op_code, contents = line
+                    responses = self.chat_app.handler(user, op_code, contents)
                 
 
     def handle_client(self, conn):
         # Define a user object to keep track of the user and state for the thread
         curr_user = User(conn)
 
-        inputs = [self.server]
+        inputs = [conn]
+
+        logging.info("test")
 
         # Continuously poll for messages while exit event has not been set
         while self.thread_running:
@@ -79,14 +89,15 @@ class Server:
 
                 for sock in read_sockets:
                     # If the socket is the server socket, accept as a connection
-                    if sock == self.server:
+                    if sock == conn:
                         client, _ = sock.accept()
                         inputs.append(client)
                     # Otherwise, read the data from the socket
                     else:
                         data = sock.recv(1024)
                         if data:
-                            op_code, contents = unpack_packet(data)
+                            username, op_code, contents = unpack_packet(data)
+                            logging.info(username, op_code, contents)
                             self.queue.put((curr_user, int(op_code), contents))
                         # If there is no data, we remove the connection
                         else:
@@ -228,6 +239,7 @@ if __name__ == "__main__":
     threads = []
 
     try:
+        # server.instantiate_from_csv()
         threads.append(threading.Thread(target=server.listen_heartbeat))
         # threads.append(threading.Thread(target=server.send_heartbeat))
         threads.append(threading.Thread(target=server.handle_queue))
