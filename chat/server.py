@@ -72,6 +72,7 @@ class Server:
             with open(f'./chat/logs/{self.server_number}.csv', 'w') as csv_file:
                 pass
         else:
+            # open up the log file and read in the contents
             with open(f'./chat/logs/{self.server_number}.csv', 'r') as csv_file:
                 csv_reader = csv.reader(csv_file)
                 for line in csv_reader:
@@ -132,6 +133,9 @@ class Server:
             conn.send(pack_packet(username, op_code, contents))
     
     def listen_internal(self):
+        """
+        Listens to the other servers for state updates
+        """
         self.internal_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.internal_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.internal_socket.bind((self.machine.ip, self.machine.internal_port))
@@ -166,6 +170,9 @@ class Server:
             self.heart_socket.close()
     
     def listen_heartbeat(self):
+        """
+        Pings the other servers to check if they are alive
+        """
         self.heart_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.heart_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.heart_socket.bind((self.machine.ip, self.machine.heart_port))
@@ -198,6 +205,9 @@ class Server:
             self.heart_socket.close()
 
     def elect_leader(self):
+        """
+        Elects a leader if there is no leader or if the leader is down
+        """
         for backup in self.backups:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(FREQUENCY)
@@ -217,11 +227,17 @@ class Server:
                 logging.info(f"{self.server_number} is elected leader")
 
     def send_heartbeat(self):
+        """
+        Sends a heartbeat to the other servers
+        """
         while self.server_running:
             self.elect_leader()
             time.sleep(FREQUENCY)
 
     def handle_queue(self):
+        """
+        Handles the queue of messages from the clients
+        """
         while self.server_running:
             if not self.queue.empty():
                 user, op_code, contents = self.queue.get()
