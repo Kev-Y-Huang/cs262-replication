@@ -54,11 +54,11 @@ class Client:
                 _, op, _ = unpack_packet(self.server.recv(2048))
                 if op == 0:
                     self.server = None
+                    self.dest = (self.dest + 1) % len(MACHINES)
             except KeyboardInterrupt:
                 break
             except:
                 self.server = None
-            finally:
                 self.dest = (self.dest + 1) % len(MACHINES)
 
         print("new input")
