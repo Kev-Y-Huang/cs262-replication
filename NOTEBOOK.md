@@ -23,7 +23,8 @@ Under the primary-backup protocol, 2-fault tolerance for crash/failstop failures
 
 A critical aspect of peer-to-peer communication that is necessary for a successful primary-backup protocol is that “heartbeats” are regularly sent such that each of the servers know whether or not other peer servers are still online. This is implemented through 2 processes:
 - listen_heartbeat: This function listens for any messages that are sent over a “heartbeat” socket and replies immediately with a heartbeat response.
-- send_heartbeat: This function sends out “heartbeat” messages on a regular interval (set to 1 second but could be set to any value depending on how restrictive we want to be) to peer server processes and waits 1 second for responses sent back over the connection.
+- send_heartbeat: This function sends out “heartbeat” messages on a regular interval (set to 1 second but could be set to any value depending on how restrictive we want to be)  * When the server goes down, the client will need to reconnect to a new server
+ to peer server processes and waits 1 second for responses sent back over the connection.
 
 #### Leader Election
 
@@ -65,7 +66,7 @@ Because of the way we designed our logs and csv state, it would be difficult to 
     * Persistance issue: When all the servers go down and come back up, the client isn't able to send messages properly
         * To address this, we implemented client to server pinging to ensure that the client eventually finds the primary server when it comes back up.
         * To make sure that the client-side experience is seamless, we sent user state to the server as well when it reconnected, simulating as if the client never disconnected in the first place.
-        
+
 
 
 ### April 9th
