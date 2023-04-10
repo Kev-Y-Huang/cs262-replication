@@ -1,4 +1,6 @@
 
 server:
   host: localhost
-  port: 6666
+  port1: 5555
+  port2: 6666
+  port3: 7777

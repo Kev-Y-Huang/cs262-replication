@@ -47,7 +47,7 @@ def get_server_config_from_yaml(yaml_data):
         raise ValueError('Yaml data needs to be a dict type!')
 
     server_config = yaml_data['server']
-    return server_config['host'], server_config['port']
+    return server_config['host'], [server_config['port1'], server_config['port2'], server_config['port3']]
 
 
 def get_server_config_from_file(relative_path):
