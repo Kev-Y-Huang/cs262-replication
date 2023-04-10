@@ -34,7 +34,7 @@ class Server:
         logging.info('Starting Wire Protocol Server')
         self.chat_app = Chat()
 
-        self.thread_running = True
+        self.server_running = True
 
         self.queue = Queue()
         self.lockReady = threading.Lock()
@@ -82,7 +82,7 @@ class Server:
 
         try:
             # Continuously poll for messages while exit event has not been set
-            while self.thread_running:
+            while self.server_running:
                 # Use select.select to poll for messages
                 read_sockets, _, _ = select.select(inputs, [], [], 0.1)
 
@@ -91,14 +91,17 @@ class Server:
                     if sock == conn:
                         data = sock.recv(1024)
                         if data:
-                            username, op_code, contents = unpack_packet(data)
+                            curr_user.username, op_code, contents = unpack_packet(data)
 
-                            """prints the message and address of the
-                            user who just sent the message on the server
-                            terminal"""
-                            print(f"<{addr[0]}|{username}> {op_code}|{contents}")
+                            if int(op_code) == 7:
+                                sock.send(pack_packet("", 1, ""))
+                            else:
+                                """prints the message and address of the
+                                user who just sent the message on the server
+                                terminal"""
+                                print(f"<{addr[0]}|{curr_user.username}> {op_code}|{contents}")
 
-                            self.queue.put((curr_user, int(op_code), contents))
+                                self.queue.put((curr_user, int(op_code), contents))
                         # If there is no data, we remove the connection
                         else:
                             self.queue.put((curr_user, 3, ""))
@@ -129,7 +132,7 @@ class Server:
         inputs = [server.internal_socket]
 
         try:
-            while self.thread_running:
+            while self.server_running:
                 read_sockets, _, _ = select.select(inputs, [], [], 0.1)
 
                 for sock in read_sockets:
@@ -163,7 +166,7 @@ class Server:
         inputs = [server.heart_socket]
 
         try:
-            while self.thread_running:
+            while self.server_running:
                 read_sockets, _, _ = select.select(inputs, [], [], 0.1)
 
                 for sock in read_sockets:
@@ -206,16 +209,16 @@ class Server:
                 logging.info(f"{self.server_number} is elected leader")
 
     def send_heartbeat(self):
-        time.sleep(FREQUENCY)
-        while self.thread_running:
+        while self.server_running:
             self.elect_leader()
             time.sleep(FREQUENCY)
 
     def handle_queue(self):
-        while self.thread_running:
+        while self.server_running:
             if not self.queue.empty():
                 user, op_code, contents = self.queue.get()
                 name = user.get_name()
+                logging.info(user.get_name(), op_code, contents)
                 responses = self.chat_app.handler(user, op_code, contents)
                 
                 if op_code > 0:
@@ -266,7 +269,7 @@ if __name__ == "__main__":
 
         inputs = [server.server]
         
-        while server.thread_running:
+        while server.server_running:
             read_sockets, _, _ = select.select(inputs, [], [], 0.1)
 
             for sock in read_sockets:
@@ -288,7 +291,7 @@ if __name__ == "__main__":
                     conn.close()
     except:
         logging.info('Stopping Server.')
-        server.thread_running = False
+        server.server_running = False
 
         # if server.socket1 is not None:
         #     server.socket1.close()

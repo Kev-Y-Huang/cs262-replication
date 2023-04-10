@@ -1,6 +1,10 @@
 
 ## Design Considerations
 
+### Architecture Overview
+
+We implemented the primary secondary backup model using our custom wire protocol between client and server and socket communication with one primary replica and two secondary replicas. This allowed us to be 2-fault tolerant, since if 2 servers go down, we will still have one server left that will allow the user to interact with the system with no noticeable effect. We ended up using logs (csv files for each of the servers) to keep state to ensure persistence. We also implemented a heartbeat protocol to ensure that the servers are still alive and to detect when a server goes down. If a server goes down, we automatically elected a new leader and continued to serve the client’s requests.
+
 ### Persistence
 
 - When all the servers go down and are brought back up the system should still work as expected and all unsent messages should still be - queued to send
@@ -33,216 +37,42 @@ We performed testing manually and through our old unit tests from Design Exercis
 - Persistence: after all servers go down and come back on, there was no impact on the client
 - Tested on two separate machines, with clients on either machine as well
 
-
 ## Working Log
 
 
-### Feb 21st
+### April 9th
 
-Tasks done
-
-* Bug fixed for GRPC not sending all messages to client
-    * adding in lock for when a user is sending messages to another user
-* Bug fixed for user trying to log in to an account that is already logged in
-* Add response from server when message gets queued/sent immediately for GRPC
-* Add response from server when message gets queued/sent immediately for wire protocol
-* Add threading locks for GRPC
-
-
-TODOs
-
-Problems/Questions:
+* For persistence, we either need to save the logs of each server to a database or save the logs to a file
+    * File is probably more straightforward
+        * Each server could iterate through the logs and then execute the statments to get to the current state
+* Heartbeat
+    * We will have a heartbeat thread that will send a heartbeat to all the other servers every 1 seconds
+    * If a server a server isn't able to connect, it will assume that the server is down
+    * If a server is down, we will need to pick a new leader
 
 
-### Feb 20th
+### April 8th
 
-Tasks done
+* For fault tolerance, we will use the primary backup model
+    * We will have three servers - one is the primary, the other two are backup
+        * Determined by the order in which they are created
+        * If the first server (which will be the primary server) goes down, the next lowest server ID will be the primary server
+    * Clients knows all the servers
+        * If primary server goes down, the client will ping all the other servers until it finds the primary server
+        * If a client pings a server that is not the primary, the request will not be processed
+* Server Process Architecture:
+    * Threads:
+        * Listen for incoming messages from clients
+        * Manage primary/backup process and elections
+        * Worker for running through queue
+        * Heartbeat/fault detector
+* Client Process Architecture:
+    * Threads:
+        * Listen for messages from user input and from server
+* Implementing state updates
+    * Whenever a state is updated, it needs to:
+        * Lock the resource
+        * Send an update to all the replicants
+        * Wait for acknowledgement from at least one of the replicants
+        * Unlock the resource and send back a response to the client if needed
 
-* Added in working GRPC
-    * Decided to create new functions even though the code was very similar in order to handle specifics within GRPC
-* Added in authentication checks for when a user tries specific op codes.
-* Added in timeout for wire protocol
-
-TODOs
-
-Problems/Questions:
-
-* We saw issues with multiple packets being sent to the client through our wire protocol implementation, specifically when a user decided to deliver all messages that had been queued to send to them when they were offline. Packets were beign skipped when received, even though they were all being sent. We determined this was becauset the packets were being sent to quickly, so to solve this, we decided to add a short timeout between packets being sent.
-
-### Feb 19th
-
-Tasks done
-
-* Added unit test cases
-* Fixed deliver queued messages
-    * Should clear all queued messages after they’ve been sent
-
-TODOs
-
-* GRPC
-
-Problems/Questions:
-
-* None
-
-### Feb 18th
-
-Tasks done
-
-* Fixed delete user and logout of account
-* Creating a User class
-    * Maps username to socket connection
-        * Sets usernames
-        * Gets socket connection
-
-TODOs
-
-* Implement GRPC
-
-Problems/Questions:
-
-* Error for MacOS using msvcrt
-    * Need to check the os of the user and conditionally use msvcrt
-
-
-### Feb 17th
-
-Tasks done
-
-* Implemented wire protocol
-    * Current structure
-        * 4 byte unsigned integer for data length (N)
-        * 1 byte unsigned integer for operation code
-        * N bytes for packet data
-    * Format: &lt;command>|&lt;text>
-        * 0|                  		-> list user accounts 
-        * 1|&lt;username>       	-> create an account with name username 
-        * 2|&lt;username>        	-> login to an account with name username 
-        * 3|&lt;username>        	-> logout from current account
-        * 4|                  		-> delete current account 
-        * 5|&lt;username>|&lt;text> 	 -> send message to username 
-        * 6|                 		 -> deliver all unsent messages to current user
-
-TODOs
-
-* Optimize code
-    * Don’t use busy waiting. Instead, try to use blocking-wait till a descriptor becomes ready.
-    * Implement packet size limit and try implement packet breakup
-
-Problems/Questions:
-
-
-* Why am I getting this error: OSError: [WinError 10038] An operation was attempted on something that is not a socket
-    * [Windows can’t use sys.stdin](https://stackoverflow.com/a/35889952)
-    * Solution: [Use msvcrt](https://stackoverflow.com/a/46823814)
-        * Needed to use msvcrt to manage polling on stdin for windows
-        * Needed to add timeout override (currently 0.1 seconds)
-* Should we have an op code to disconnect?
-    * Right now, we have Ctrl+C to disconnect
-
-
-### Feb 16th
-
-Tasks done
-
-* Implemented working create account and send message function, creating a Chat class
-    * Contains handler function that takes in the op code and then calls each respective function
-        * List user accounts
-        * Create account
-        * Log in to account
-        * Log out of account
-        * Delete current account
-        * Send message to a user name
-        * Deliver all unsent messages
-
-TODOs
-
-Problems/Questions:
-
-
-* Directly sending messages when user is active vs if they are not active and log in later
-    * Messages should send immediately if a user is already logged in
-* If they are not logged in, then the message should be queued for the user until they login AND send the op code to receive all messages
-* Threading
-    * Where should we incorporate threading? In the Chat class or the server code
-        * Needs to be able to lock every time a user performs an action so that the users/messages are consistent
-* Connection vs flags
-    * Messages need to be broadcast to specific user
-        * Ex. error message to original user, vs message sent to another user
-    * Should probably return a tuple with some flag/connection to a user and the message
-        * Flag
-            * Pros: 
-            * Cons: 
-        * Connection
-            * Pros: will directly get the specific user we need
-    * Potentially creating a new User class to handle this?
-
-
-### Feb 13
-
-Learnings from OH
-
-* Should use op codes
-* Should generate uuid key for each account when created
-* Delivering should be instantaneous if everyone is logged in
-* Or multithreading, need to setup specific firewall rules
-    * `sudo ufw allow 2050`
-        * This can be any high port number
-* Unit testing
-    * Simple as create 2 accounts and pass message between the 2
-* Wire Protocol
-    * Can be simple
-    * Doesn’t need a version number
-    * Op code should handle each action the client wants to do
-    * Can parse the op code with a pipe character or similar character
-    * Needs to be sent in bits - not as a whole string
-
-Resources
-
-* [Python Multithreading Tutorial](https://www.geeksforgeeks.org/socket-programming-multi-threading-python/)
-
-### Feb 10
-
-Tasks done
-
-* Implemented basic client-side/server-side code
-* Implemented wire protocol
-    * Current structure
-        * 4 byte unsigned integer for packet length (M)
-        * 4 byte unsigned integer for version number
-        * 4 byte unsigned integer for data length (N)
-        * 1 byte unsigned integer for operation code
-        * N bytes for packet data
-    * Wire protocol will pack the message user sends in the above format and send from client to server
-        * Question: how will we parse the op code, what does the op code actually do?
-    * Server will unpack the message received from the client and broadcast to another user
-
-TODOs
-
-* Optimize code
-    * Don’t use busy waiting. Instead, try to use blocking-wait till a descriptor becomes ready.
-    * Implement packet size limit and try implement packet breakup
-
-Problems/Questions:
-
-* Why am I getting this error: OSError: [WinError 10038] An operation was attempted on something that is not a socket
-    * [Windows can’t use sys.stdin](https://stackoverflow.com/a/35889952)
-
-Resources:
-
-* [Simple Chat Room Guide](https://www.geeksforgeeks.org/simple-chat-room-using-python/)
-    * Insight into how to continuously communicate between client and server
-* [Github example of server-client communication](https://github.com/furas/python-examples/tree/master/socket/simple-protocol)
-
-### Feb. 3rd
-
-* Starting our Wire Protocol
-* Choosing to use Python
-* Potentially using AWS vs local?
-    * AWS
-        * Pros: could be run easily on multiple OS/machines
-        * Cons: set up time?
-    * Local
-        * Pros: easier to set up
-        * Cons: only one machine can run the server
-    * We decided to use local for now

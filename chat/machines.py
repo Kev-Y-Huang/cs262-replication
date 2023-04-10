@@ -25,8 +25,8 @@ class Machine:
 
 MACHINE_ZERO = Machine(
     id=0,
-    ip="localhost",
-    # ip="10.250.29.21",
+    # ip="localhost",
+    ip="10.250.29.21",
     client_port=26201,
     internal_port=26202,
     heart_port=26203
@@ -34,8 +34,8 @@ MACHINE_ZERO = Machine(
 
 MACHINE_ONE = Machine(
     id=1,
-    ip="localhost",
-    # ip="10.250.29.21",
+    # ip="localhost",
+    ip="10.250.29.21",
     client_port=26211,
     internal_port=26212,
     heart_port=26213
@@ -43,8 +43,8 @@ MACHINE_ONE = Machine(
 
 MACHINE_TWO = Machine(
     id=2,
-    ip="localhost",
-    # ip="10.25.193.46",
+    # ip="localhost",
+    ip="10.25.193.46",
     client_port=26221,
     internal_port=26222,
     heart_port=26223

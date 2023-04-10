@@ -18,52 +18,56 @@ ERROR_MSG = """<client> Invalid input string, please use format <command>|<text>
     5|<username>|<text> -> send message to username
     6|                  -> deliver all unsent messages to current user"""
 
+FREQUENCY = 1 # Frequency of heartbeat in seconds
+
 class Client:
     def __init__(self):
         self.server = None
         self.username = ""
-        self.thread_running = True
+        self.client_running = True
         self.dest = 0
         self.inputs = []
 
     def ping_server(self):
-        """
-        Checks the primary regularly and relogs in if needed
-        """
-        FREQUENCY = 1
-        time.sleep(FREQUENCY)
-        while True:
-            okay = self.connector.ping_server()
-            if not okay:
-                self.connector.attempt_connection()
-                self.relogin()
+        while self.client_running:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(FREQUENCY)
+            try:
+                sock.connect((MACHINES[self.dest].ip, MACHINES[self.dest].heart_port))
+                sock.send("ping".encode(encoding='utf-8'))
+                sock.recv(2048)
+                sock.close()
+            except:
+                self.attempt_connection()
             time.sleep(FREQUENCY)
-
+    
     def attempt_connection(self):
         """
         Attempts to connect to the server at the given host and port.
         """
-        while not self.server:
+        while not self.server and self.client_running:
             machine = MACHINES[self.dest]
             try:
                 self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server.connect((machine.ip, machine.client_port))
-                user, op, _ = unpack_packet(self.server.recv(2048))
+                _, op, _ = unpack_packet(self.server.recv(2048))
                 if op == 0:
                     self.server = None
             except KeyboardInterrupt:
                 break
-            except Exception as e:
+            except:
                 self.server = None
+            finally:
                 self.dest = (self.dest + 1) % len(MACHINES)
 
-        self.inputs.append(self.server)
-        print(self.inputs)
+        if self.server:
+            print("new connection")
+            self.inputs.append(self.server)
     
     
     def receive_messages(self):
         try:
-            while self.thread_running:
+            while self.client_running:
                 # Use select.select to poll for messages
                 read_sockets, _, _ = select.select(self.inputs, [], [], 0.1)
 
@@ -77,13 +81,11 @@ class Client:
                             print(output)
                         # If there is no data, then the connection has been closed
                         else:
-                            print("nooooooo")
                             self.server = None
                             sock.close()
                             self.inputs.remove(sock)
                             self.attempt_connection()
         finally:
-            print("tought luck")
             # Close all socket connections
             for sock in self.inputs:
                 sock.close()
@@ -92,11 +94,11 @@ class Client:
 
     def send_user_input(self):
         # Continuously listen for user inputs in the terminal
-        while self.thread_running:
+        while self.client_running:
             usr_input = input()
             # Exit program upon quiting
             if usr_input == "quit":
-                self.thread_running = False
+                self.client_running = False
             # Parse message if non-empty
             elif usr_input != '':
                 # Parses the user input to see if it is a valid input
@@ -118,14 +120,12 @@ class Client:
                                 not_sent = False
                             # If the message cannot be sent, connect to new server
                             except:
-                                print("failure")
                                 self.attempt_connection()
                 else:
                     print(ERROR_MSG)
        
 
 def main():
-    i = 0
     client = Client()
 
     client.attempt_connection()
@@ -136,13 +136,14 @@ def main():
         # Separate thread for processing incomming messages from the server
         threads.append(Thread(target=client.receive_messages))
         threads.append(Thread(target=client.send_user_input))
+        threads.append(Thread(target=client.ping_server))
 
         for eachThread in threads:
             eachThread.start()
-        while client.thread_running:
+        while client.client_running:
             continue
     except:
-        client.thread_running = False
+        client.client_running = False
         for eachThread in threads:
             eachThread.join()
         sys.exit()
