@@ -274,8 +274,12 @@ if __name__ == "__main__":
     threads = []
 
     try:
+        # Startup the threads for the server
+        # heartbeat to check if other servers are alive
         threads.append(threading.Thread(target=server.listen_heartbeat))
+        # listen for incoming messages from other servers
         threads.append(threading.Thread(target=server.listen_internal))
+        # handle the queue of messages from the server
         threads.append(threading.Thread(target=server.handle_queue))
         
         for eachThread in threads:

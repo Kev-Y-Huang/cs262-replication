@@ -50,6 +50,24 @@ Because of the way we designed our logs and csv state, it would be difficult to 
 
 ## Working Log
 
+### April 10th
+
+* We need to implement a way to detect when a server goes down
+    * We will use a heartbeat protocol
+        * Each server will send a heartbeat to all the other servers every 1 seconds
+        * If a server is not able to connect to another server, it will assume that the server is down
+        * If a server is down, we will need to pick a new leader
+* Client Server Issues
+    * We need to figure out how to handle the case where the client is connected to a server that is not the primary server
+        * When the server goes down, the client will need to reconnect to a new server
+        * We could have the client ping all the servers until it finds the primary server
+        * If a client pings a server that is not the primary, the request will not be processed
+    * Persistance issue: When all the servers go down and come back up, the client isn't able to send messages properly
+        * To address this, we implemented client to server pinging to ensure that the client eventually finds the primary server when it comes back up.
+        * To make sure that the client-side experience is seamless, we sent user state to the server as well when it reconnected, simulating as if the client never disconnected in the first place.
+        
+
+
 ### April 9th
 
 * For persistence, we either need to save the logs of each server to a database or save the logs to a file
