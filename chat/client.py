@@ -63,6 +63,21 @@ class Client:
     
     def receive_messages(self):
         while self.thread_running:
+            try:
+                data = self.server.recv(1024)
+
+                if data:
+                    # Read in the data as a big-endian integer
+                        self.username, _, output = unpack_packet(data)
+                        print(output)
+
+                # If data has no content, we remove the connection
+                else:
+                    self.server.close()
+
+            except Exception as e:
+                print(e)
+                break
             # Use select.select to poll for messages
             read_sockets, _, _ = select.select(self.inputs, [], [], 0.1)
 

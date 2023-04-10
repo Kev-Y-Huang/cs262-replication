@@ -2,8 +2,6 @@ import re
 import threading
 from _thread import *
 from typing import NewType
-import sqlite3
-from sqlite3 import Cursor
 
 Response = NewType('response', tuple[int, str])
 
@@ -33,7 +31,7 @@ class User:
         Sets the username of the current account
     """
 
-    def __init__(self, conn, username: str = None):
+    def __init__(self, conn, username: str = ""):
         self.conn = conn
         self.username = username
 
@@ -43,7 +41,7 @@ class User:
     def get_name(self):
         return self.username
 
-    def set_name(self, username: str = None):
+    def set_name(self, username: str = ""):
         self.username = username
 
     def stringify(self):
@@ -95,25 +93,22 @@ class Chat:
         content: str, optional
             Contents of the request
         """
-        conn = sqlite3.connect(f'{self.server_number}.db')
-        c = conn.cursor()
-
         if op_code == 0:
             return self.list_accounts(user, content)
         elif op_code == 1:
-            return self.create_account(user, content, c)
+            return self.create_account(user, content)
         elif op_code == 2:
             return self.login_account(user, content)
         elif user.username in self.online_users:
             if op_code == 3:
                 return self.logout_account(user)
             elif op_code == 4:
-                return self.delete_account(user, c)
+                return self.delete_account(user)
             elif op_code == 5:
                 match = re.match(r"(\S+)\|((\S| )+)", content)
                 if match:
                     send_user, message = match.group(1), match.group(2)
-                    return self.send_message(user, send_user, message, c)
+                    return self.send_message(user, send_user, message)
                 else:
                     return [(user.get_conn(), f"<server> Invalid input: {content}")]
             elif op_code == 6:
@@ -152,7 +147,7 @@ class Chat:
     
         return [(conn, f"<server> List of accounts: {str(list_of_usernames)}")]
 
-    def create_account(self, user: User, username: str, sql_conn: Cursor) -> list[Response]:
+    def create_account(self, user: User, username: str) -> list[Response]:
         """
         Creates an account given a specified username
 
@@ -189,11 +184,6 @@ class Chat:
             response = (
                 conn, f'<server> Account created with username "{username}".')
             
-            try:
-                sql_conn.execute('INSERT INTO users VALUES (?)', (username,))
-            except:
-                print("Error inserting user into database. Replication states may be inconsistent.")
-
         return [response]
 
     def login_account(self, user: User, username: str) -> list[Response]:
@@ -261,7 +251,7 @@ class Chat:
         user.set_name()
         return [(conn, f"<server> Account \"{to_logout}\" logged out.")]
 
-    def delete_account(self, user: User, sql_conn: Cursor) -> list[Response]:
+    def delete_account(self, user: User) -> list[Response]:
         """
         Deletes the current account
 
@@ -279,17 +269,12 @@ class Chat:
         else:
             del self.accounts[to_delete]
             del self.online_users[to_delete]
-            try:
-                sql_conn.execute('DELETE FROM users WHERE username=?', (to_delete,))
-                sql_conn.execute('DELETE FROM messages WHERE sender=? OR receiver=?', (to_delete, to_delete))
-            except:
-                print("Error deleting user from database. Replication states may be inconsistent.")
         self.lock.release()
 
         user.set_name()
         return [(conn, f"<server> Account \"{to_delete}\" deleted.")]
 
-    def send_message(self, user: User, send_user: str, message: str, sql_conn: Cursor) -> list[Response]:
+    def send_message(self, user: User, send_user: str, message: str) -> list[Response]:
         """
         Sends a message to a specified user
 
@@ -325,15 +310,11 @@ class Chat:
                 response = [(
                     conn, f"<server> Account \"{send_user}\" not online. Message queued to send")]
                 
-                try:
-                    sql_conn.execute('INSERT INTO messages VALUES (?, ?, ?)', (user.get_name(), send_user, message))
-                except:
-                    print("Error adding queued message to database. Replication states may be inconsistent.")
         self.lock.release()
 
         return response
 
-    def deliver_undelivered(self, user: User, sql_conn: Cursor) -> list[Response]:
+    def deliver_undelivered(self, user: User) -> list[Response]:
         """
         Delivers all queued messages to a user upon request
 
@@ -356,8 +337,4 @@ class Chat:
         if len(responses) == 0:
             return [(conn, "<server> No messages queued")]
         else:
-            try:
-                sql_conn.execute('DELETE FROM messages WHERE receiver=?', (user.get_name(),))
-            except:
-                print("Error deleting queued messages from database. Replication states may be inconsistent.")
             return responses

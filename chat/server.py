@@ -60,16 +60,15 @@ class Server:
         This function is used to re-instantiate the server from a csv file to its original state
         """
         # if file does not exist, create empty csv file
-        if not os.path.exists(f'{self.server_number}.csv'):
+        if not os.path.exists(f'./chat/logs/{self.server_number}.csv'):
             with open(f'{self.server_number}.csv', 'w') as csv_file:
-                csv_writer = csv.writer(csv_file)
-                # write empty row
-                csv_writer.writerow([])
+                pass
         else:
-            with open(f'{self.server_number}.csv', 'r') as csv_file:
+            with open(f'./chat/logs/{self.server_number}.csv', 'r') as csv_file:
                 csv_reader = csv.reader(csv_file)
                 for line in csv_reader:
-                    user, op_code, contents = line
+                    username, op_code, contents = line
+                    user = User(None, username)
                     responses = self.chat_app.handler(user, op_code, contents)
                 
 
@@ -77,36 +76,52 @@ class Server:
         # Define a user object to keep track of the user and state for the thread
         curr_user = User(conn)
 
-        inputs = [conn]
+        inputs = [self.server]
 
         logging.info("test")
 
         # Continuously poll for messages while exit event has not been set
         while self.thread_running:
             try:
-                # Use select.select to poll for messages
-                read_sockets, _, _ = select.select(inputs, [], [], 0.1)
+                data = conn.recv(1024)
 
-                for sock in read_sockets:
-                    # If the socket is the server socket, accept as a connection
-                    if sock == conn:
-                        client, _ = sock.accept()
-                        inputs.append(client)
-                    # Otherwise, read the data from the socket
-                    else:
-                        data = sock.recv(1024)
-                        if data:
-                            username, op_code, contents = unpack_packet(data)
-                            logging.info(username, op_code, contents)
-                            self.queue.put((curr_user, int(op_code), contents))
-                        # If there is no data, we remove the connection
-                        else:
-                            self.queue.put((curr_user, 3, ""))
+                if data:
+                    username, op_code, contents = unpack_packet(data)
+
+                    """prints the message and address of the
+                    user who just sent the message on the server
+                    terminal"""
+                    print(f"<{addr[0]}|{username}> {op_code}|{contents}")
+                    self.queue.put((curr_user, int(op_code), contents))
+
+                # If data has no content, we remove the connection
+                else:
+                    self.queue.put((curr_user, 3, ""))
+
+                # # Use select.select to poll for messages
+                # read_sockets, _, _ = select.select(inputs, [], [], 0.1)
+
+                # for sock in read_sockets:
+                #     # If the socket is the server socket, accept as a connection
+                #     if sock == conn:
+                #         client, _ = sock.accept()
+                #         inputs.append(client)
+                #     # Otherwise, read the data from the socket
+                #     else:
+                #         data = sock.recv(1024)
+                #         if data:
+                #             username, op_code, contents = unpack_packet(data)
+                #             logging.info(username, op_code, contents)
+                #             self.queue.put((curr_user, int(op_code), contents))
+                #         # If there is no data, we remove the connection
+                #         else:
+                #             self.queue.put((curr_user, 3, ""))
             except:
                 break
+        conn.close()
 
 
-    def broadcast_update(self, user, op_code, contents):
+    def broadcast_update(self, username: str, op_code: int, contents: str):
         """
         Takes care of state-updates.
         """
@@ -115,7 +130,8 @@ class Server:
         for backup in self.backups:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.connect((backup.ip, backup.internal_port))
-            conn.send(pack_packet(user, op_code, contents))
+            logging.info(f"string: {username}")
+            conn.send(pack_packet(username, op_code, contents))
     
     def listen_internal(self):
         self.internal_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -138,7 +154,8 @@ class Server:
                     else:
                         data = sock.recv(1024)
                         if data:
-                            op_code, contents = unpack_packet(data)
+                            username, op_code, contents = unpack_packet(data)
+                            curr_user = User(None, username)
                             self.queue.put((curr_user, int(op_code), contents))
                         # If there is no data, then the connection has been closed
                         else:
@@ -213,20 +230,21 @@ class Server:
                 user, op_code, contents = self.queue.get()
                 responses = self.chat_app.handler(user, op_code, self.server_number, contents)
                 
-                # write user, op_code, contents to csv file
-                with open(f'{self.server_number}.csv', 'a') as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    csv_writer.writerow([user, op_code, contents])
+                if op_code > 0:
+                    # write user, op_code, contents to csv file
+                    with open(f'./chat/logs/{self.server_number}.csv', 'a') as csv_file:
+                        csv_writer = csv.writer(csv_file)
+                        csv_writer.writerow([user.get_name(), op_code, contents])
 
                 if self.is_leader:
                     # update other servers
-                    self.broadcast_update(user, op_code, contents)
+                    self.broadcast_update(user.get_name(), op_code, contents)
                     # Iterate and send out each new response generated by the server
                     for recip_conn, response in responses:
-                        output = pack_packet(1, response)
-                        recip_conn.send(output)
-                        id += 1
-                        time.sleep(0.1)
+                        if recip_conn:
+                            output = pack_packet(user.get_name(), 1, response)
+                            recip_conn.send(output)
+                            time.sleep(0.1)
 
 
 if __name__ == "__main__":
@@ -236,12 +254,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     server = Server(args.server_number)
+    server.instantiate_from_csv()
     threads = []
 
     try:
-        # server.instantiate_from_csv()
         threads.append(threading.Thread(target=server.listen_heartbeat))
-        # threads.append(threading.Thread(target=server.send_heartbeat))
+        threads.append(threading.Thread(target=server.listen_internal))
         threads.append(threading.Thread(target=server.handle_queue))
         
         for eachThread in threads:

@@ -43,7 +43,7 @@ chat_app = Chat()
 
 # Test creating a user
 user1 = User(None)
-assert user1.get_name() is None
+assert user1.get_name() is ""
 
 # Test setting a user's name
 user1.set_name("user1")

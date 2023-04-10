@@ -24,4 +24,4 @@ def unpack_packet(packet: bytes) -> tuple:
     data_len, operation = struct.unpack("!IB", packet[4 + name_len:9 + name_len])
     data = packet[9 + name_len:9 + name_len + data_len]
     output = data.decode('utf-8')
-    return username, operation, output
+    return username if username else "", operation, output
