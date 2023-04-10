@@ -50,57 +50,43 @@ class Client:
                 self.server.connect((machine.ip, machine.client_port))
                 user, op, _ = unpack_packet(self.server.recv(2048))
                 if op == 0:
-                    self.iconn = None
+                    self.server = None
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                self.iconn = None
+                self.server = None
                 self.dest = (self.dest + 1) % len(MACHINES)
 
-        print(self.dest)
         self.inputs.append(self.server)
+        print(self.inputs)
     
     
     def receive_messages(self):
-        while self.thread_running:
-            try:
-                data = self.server.recv(1024)
+        try:
+            while self.thread_running:
+                # Use select.select to poll for messages
+                read_sockets, _, _ = select.select(self.inputs, [], [], 0.1)
 
-                if data:
-                    # Read in the data as a big-endian integer
-                        self.username, _, output = unpack_packet(data)
-                        print(output)
-
-                # If data has no content, we remove the connection
-                else:
-                    self.server.close()
-
-            except Exception as e:
-                print(e)
-                break
-            # Use select.select to poll for messages
-            read_sockets, _, _ = select.select(self.inputs, [], [], 0.1)
-
-            for sock in read_sockets:
-                # If the socket is the server socket, accept as a connection
-                if sock == self.server:
-                    client, _ = sock.accept()
-                    self.inputs.append(client)
-                # Otherwise, read the data from the socket
-                else:
-                    data = sock.recv(1024)
-                    if data:
-                        # Read in the data as a big-endian integer
-                        self.username, _, output = unpack_packet(data)
-                        print(output)
-                    # If there is no data, then the connection has been closed
-                    else:
-                        sock.close()
-                        self.inputs.remove(sock)
-
-        # Close all socket connections
-        for sock in self.inputs:
-            sock.close()
+                for sock in read_sockets:
+                    # If the socket is the server socket, accept as a connection
+                    if sock == self.server:
+                        data = sock.recv(1024)
+                        if data:
+                            # Read in the data as a big-endian integer
+                            self.username, _, output = unpack_packet(data)
+                            print(output)
+                        # If there is no data, then the connection has been closed
+                        else:
+                            print("nooooooo")
+                            self.server = None
+                            sock.close()
+                            self.inputs.remove(sock)
+                            self.attempt_connection()
+        finally:
+            print("tought luck")
+            # Close all socket connections
+            for sock in self.inputs:
+                sock.close()
         
 
 
@@ -110,7 +96,7 @@ class Client:
             usr_input = input()
             # Exit program upon quiting
             if usr_input == "quit":
-                raise KeyboardInterrupt
+                self.thread_running = False
             # Parse message if non-empty
             elif usr_input != '':
                 # Parses the user input to see if it is a valid input
@@ -133,10 +119,7 @@ class Client:
                             # If the message cannot be sent, connect to new server
                             except:
                                 print("failure")
-                                self.server.close()
-                                self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                                machine = MACHINES[(self.dest + 1) % 3]
-                                self.server.connect((machine.ip, machine.client_port))
+                                self.attempt_connection()
                 else:
                     print(ERROR_MSG)
        

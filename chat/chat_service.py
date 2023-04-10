@@ -78,7 +78,7 @@ class Chat:
         self.online_users = {}
         self.lock = threading.Lock()
 
-    def handler(self, user: User, op_code: int, server_number: int, content: str = "") -> list[Response]:
+    def handler(self, user: User, op_code: int, content: str = "") -> list[Response]:
         """
         Handler function
 
@@ -112,7 +112,7 @@ class Chat:
                 else:
                     return [(user.get_conn(), f"<server> Invalid input: {content}")]
             elif op_code == 6:
-                return self.deliver_undelivered(user, c)
+                return self.deliver_undelivered(user)
             else:
                 return [(user.get_conn(), f'<server> {op_code} is not a valid operation code.')]
         else:
