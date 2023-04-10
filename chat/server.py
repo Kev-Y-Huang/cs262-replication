@@ -242,7 +242,7 @@ class Server:
                 # logging.info((user.get_name(), op_code, contents))
                 responses = self.chat_app.handler(user, op_code, contents)
                 
-                if op_code > 0:
+                if 7 > op_code > 0:
                     # write user, op_code, contents to csv file
                     with open(f'./chat/logs/{self.server_number}.csv', 'a', newline='') as csv_file:
                         csv_writer = csv.writer(csv_file)
