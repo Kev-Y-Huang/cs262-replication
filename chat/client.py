@@ -1,6 +1,7 @@
 import re
 import socket
 import sys
+import time
 from threading import *
 
 from machines import MACHINES
@@ -21,15 +22,46 @@ class Client:
         self.__server = server
         self.__username = ""
         self.__thread_running = True
+        self.__dest = 0
 
+    def ping_server(self):
+        """
+        Checks the primary regularly and relogs in if needed
+        """
+        FREQUENCY = 1
+        time.sleep(FREQUENCY)
+        while True:
+            okay = self.connector.ping_server()
+            if not okay:
+                self.connector.attempt_connection()
+                self.relogin()
+            time.sleep(FREQUENCY)
+
+    def attempt_connection(self):
+        """
+        Attempts to connect to the server at the given host and port.
+        """
+
+        while not self.iconn:
+            self.primary_machine = MACHINES[self.__dest]
+            try:
+                self.iconn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.iconn.connect((self.primary_machine.ip,
+                                    self.primary_machine.client_port))
+                data = self.iconn.recv(2048)
+                resp = Response.unmarshal(data.decode())
+                if not resp.success:
+                    raise ValueError("Server is not primary")
+                    self.iconn = None
+            except Exception as e:
+                self.iconn = None
+            self.__dest = (self.__dest + 1) % len(MACHINES)
+    
     def receive_messages(self):
-        try:
-            while self.__thread_running:
-                message = self.__server.recv(1024)
-                self.__username, _, data = unpack_packet(message)
-                print(data)
-        except:
-            return
+        while self.__thread_running:
+            message = self.__server.recv(1024)
+            self.__username, _, data = unpack_packet(message)
+            print(data)
         
     def send_user_input(self):
         # Continuously listen for user inputs in the terminal
@@ -68,9 +100,17 @@ class Client:
 
 def main():
     i = 0
-    # Setup connection to server socket
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.connect((MACHINES[0].ip, MACHINES[0].client_port))
+    for machine in MACHINES:
+        try:
+            # Setup connection to server socket
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.connect((machine.ip, machine.client_port))
+            output = pack_packet("", 0, "")
+            server.send(output)
+        except OSError:
+            continue
+
+    print(machine.id)
 
     client = Client(server)
     threads = []
