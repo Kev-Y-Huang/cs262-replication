@@ -28,30 +28,31 @@ class Client:
         self.dest = 0
         self.inputs = []
 
-    def ping_server(self):
-        while self.client_running:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(FREQUENCY)
-            try:
-                sock.connect((MACHINES[self.dest].ip, MACHINES[self.dest].heart_port))
-                sock.send("ping".encode(encoding='utf-8'))
-                sock.recv(2048)
-                sock.close()
-            except:
-                self.attempt_connection()
-            time.sleep(FREQUENCY)
+    # def ping_server(self):
+    #     while self.client_running:
+    #         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #         sock.settimeout(FREQUENCY)
+    #         try:
+    #             sock.connect((MACHINES[self.dest].ip, MACHINES[self.dest].heart_port))
+    #             sock.send("ping".encode(encoding='utf-8'))
+    #             sock.recv(2048)
+    #             sock.close()
+    #         except:
+    #             self.server = None
+    #             self.attempt_connection()
+    #         time.sleep(FREQUENCY)
     
     def attempt_connection(self):
         """
         Attempts to connect to the server at the given host and port.
         """
-        self.server = None
         while not self.server and self.client_running:
             machine = MACHINES[self.dest]
             try:
                 self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server.connect((machine.ip, machine.client_port))
                 _, op, _ = unpack_packet(self.server.recv(2048))
+                
                 if op == 0:
                     self.server = None
                     self.dest = (self.dest + 1) % len(MACHINES)
@@ -61,7 +62,7 @@ class Client:
                 self.server = None
                 self.dest = (self.dest + 1) % len(MACHINES)
 
-        print("new input")
+        print(f"new input {self.dest}")
         self.inputs.append(self.server)
         output = pack_packet(self.username, 7, "")
         self.server.send(output)
@@ -119,6 +120,8 @@ class Client:
                                 not_sent = False
                             # If the message cannot be sent, connect to new server
                             except:
+                                self.server.close()
+                                self.server = None
                                 self.attempt_connection()
                 else:
                     print(ERROR_MSG)
@@ -135,7 +138,7 @@ def main():
         # Separate thread for processing incomming messages from the server
         threads.append(Thread(target=client.receive_messages))
         threads.append(Thread(target=client.send_user_input))
-        threads.append(Thread(target=client.ping_server))
+        # threads.append(Thread(target=client.ping_server))
 
         for eachThread in threads:
             eachThread.start()
