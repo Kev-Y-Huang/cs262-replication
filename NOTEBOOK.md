@@ -37,8 +37,18 @@ We performed testing manually and through our old unit tests from Design Exercis
 - Persistence: after all servers go down and come back on, there was no impact on the client
 - Tested on two separate machines, with clients on either machine as well
 
-## Working Log
+## Limitations and Issues Encountered
 
+### Server Client Connection Threading
+
+One issue we ran into occurred when all three servers went down and then came back up, on occasion,  the client would be able to reconnect to the primary server/backup server and reach its original state, but then throw an error when trying to perform an operation. We determined this was likely due to a rare timing issue when all three servers went down and the state recorded for each of them was different, therefore unable to properly process the request. In this case, the system would likely need to be restarted again, and the states of each of the machines would need to be cleared. 
+
+### Scaling
+
+Because of the way we designed our logs and csv state, it would be difficult to scale our system since the number of operations needed to reinstantiate our system to its pre-crash state would take an extremely long time at large scale.
+
+
+## Working Log
 
 ### April 9th
 
