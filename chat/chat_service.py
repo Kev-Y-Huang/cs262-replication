@@ -3,7 +3,7 @@ import threading
 from _thread import *
 from typing import NewType
 
-Response = NewType('response', tuple[int, str])
+Response = NewType('response', tuple[int, str, str])
 
 
 class User:
@@ -110,13 +110,13 @@ class Chat:
                     send_user, message = match.group(1), match.group(2)
                     return self.send_message(user, send_user, message)
                 else:
-                    return [(user.get_conn(), f"<server> Invalid input: {content}")]
+                    return [(user.get_conn(), user.get_name(), f"<server> Invalid input: {content}")]
             elif op_code == 6:
                 return self.deliver_undelivered(user)
             else:
-                return [(user.get_conn(), f'<server> {op_code} is not a valid operation code.')]
+                return [(user.get_conn(), user.get_name(), f'<server> {op_code} is not a valid operation code.')]
         else:
-            return [(user.get_conn(), "<server> Operation not permitted. You are not logged in.")]
+            return [(user.get_conn(), user.get_name(), "<server> Operation not permitted. You are not logged in.")]
 
     def list_accounts(self, user: User, exp: str = "\S*") -> list[Response]:
         """
@@ -132,12 +132,13 @@ class Chat:
         """
 
         conn = user.get_conn()
+        name = user.get_name()
 
         # Checks if the passed-in expression is a valid regex pattern
         try:
             pattern = re.compile(exp)
         except:
-            return [(conn, f"<server> {exp} is not a valid regex pattern.")]
+            return [(conn, name, f"<server> {exp} is not a valid regex pattern.")]
 
         # Filters all usernames based on the passed in regex pattern
         self.lock.acquire()
@@ -145,7 +146,7 @@ class Chat:
         self.lock.release()
 
     
-        return [(conn, f"<server> List of accounts: {str(list_of_usernames)}")]
+        return [(conn, name, f"<server> List of accounts: {str(list_of_usernames)}")]
 
     def create_account(self, user: User, username: str) -> list[Response]:
         """
@@ -160,19 +161,20 @@ class Chat:
             Username for the new account
         """
         conn = user.get_conn()
+        name = user.get_name()
 
         # Checks if the passed-in username is valid
         if " " in username or "|" in username:
-            return [(conn, '<server> Failed to create account. Username cannot have " " or "|".')]
+            return [(conn, name, '<server> Failed to create account. Username cannot have " " or "|".')]
 
         # Checks if the username is empty
         if "" == username:
-            return [(conn, '<server> Failed to create account. Username cannot be empty.')]
+            return [(conn, name, '<server> Failed to create account. Username cannot be empty.')]
 
         # Checks if the username is already in use
         if username in self.accounts:
             response = (
-                conn, f'<server> Failed to create account. Username "{username}" is already in use.')
+                conn, name, f'<server> Failed to create account. Username "{username}" is already in use.')
         else:
             # Updates chat app state for the new account
             self.lock.acquire()
@@ -182,7 +184,7 @@ class Chat:
             self.lock.release()
 
             response = (
-                conn, f'<server> Account created with username "{username}".')
+                conn, username, f'<server> Account created with username "{username}".')
             
         return [response]
 
@@ -199,15 +201,16 @@ class Chat:
             Account username
         """
         conn = user.get_conn()
+        name = user.get_name()
 
         # Check if the username is not in accounts
         if username not in self.accounts:
             response = (
-                conn, f'<server> Failed to login. Account "{username}" not found.')
+                conn, name, f'<server> Failed to login. Account "{username}" not found.')
         # Check if another user is already logged in
         elif username in self.online_users:
             response = (
-                conn, f'<server> Failed to login. Account "{username}" is already logged in. You cannot log in to the same account from multiple clients.')
+                conn, name, f'<server> Failed to login. Account "{username}" is already logged in. You cannot log in to the same account from multiple clients.')
         # otherwise, we will try to log in
         else:
             self.lock.acquire()
@@ -220,7 +223,7 @@ class Chat:
             user.set_name(username)
             self.lock.release()
 
-            response = (conn, f'<server> Account "{username}" logged in.')
+            response = (conn, user.get_name(), f'<server> Account "{username}" logged in.')
 
         return [response]
 
@@ -249,7 +252,7 @@ class Chat:
         self.lock.release()
 
         user.set_name()
-        return [(conn, f"<server> Account \"{to_logout}\" logged out.")]
+        return [(conn, "", f"<server> Account \"{to_logout}\" logged out.")]
 
     def delete_account(self, user: User) -> list[Response]:
         """
@@ -265,14 +268,14 @@ class Chat:
 
         self.lock.acquire()
         if to_delete not in self.accounts or to_delete not in self.online_users:
-            return [(conn, f"<server> Failed to delete. You are not logged in, or account \"{to_delete}\" does not exist.")]
+            return [(conn, to_delete, f"<server> Failed to delete. You are not logged in, or account \"{to_delete}\" does not exist.")]
         else:
             del self.accounts[to_delete]
             del self.online_users[to_delete]
         self.lock.release()
 
         user.set_name()
-        return [(conn, f"<server> Account \"{to_delete}\" deleted.")]
+        return [(conn, "", f"<server> Account \"{to_delete}\" deleted.")]
 
     def send_message(self, user: User, send_user: str, message: str) -> list[Response]:
         """
@@ -290,25 +293,26 @@ class Chat:
             Chat message
         """
         conn = user.get_conn()
+        name = user.get_name()
 
         self.lock.acquire()
         # Check if the username does not exist
         if send_user not in self.accounts:
             response = [(
-                conn, f"<server> Failed to send. Account \"{send_user}\" does not exist.")]
+                conn, name, f"<server> Failed to send. Account \"{send_user}\" does not exist.")]
         else:
             # send the message directly if the user is online
             response_message = f"<{user.get_name()}> {message}"
             if send_user in self.online_users:
                 send_conn = self.online_users[send_user]
-                response = [(send_conn, response_message),
-                            (conn, f"<server> Message sent to \"{send_user}\".")]
+                response = [(send_conn, send_user, response_message),
+                            (conn, name, f"<server> Message sent to \"{send_user}\".")]
             # queue the message if the user is not online
             else:
                 self.accounts[send_user].append(response_message)
                 # let the current user know that the message is queued to send
                 response = [(
-                    conn, f"<server> Account \"{send_user}\" not online. Message queued to send")]
+                    conn, name, f"<server> Account \"{send_user}\" not online. Message queued to send")]
                 
         self.lock.release()
 
@@ -324,10 +328,11 @@ class Chat:
             User information 
         """
         conn = user.get_conn()
+        name = user.get_name()
 
         self.lock.acquire()
         # get all queued messages for the user formatted correctly
-        responses = [(conn, message)
+        responses = [(conn, name, message)
                      for message in self.accounts[user.get_name()]]
         # clear the queue
         self.accounts[user.get_name()] = []
@@ -335,6 +340,6 @@ class Chat:
 
         # notify user if there were no queued messages
         if len(responses) == 0:
-            return [(conn, "<server> No messages queued")]
+            return [(conn, name, "<server> No messages queued")]
         else:
             return responses

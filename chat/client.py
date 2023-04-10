@@ -61,7 +61,6 @@ class Client:
                 self.dest = (self.dest + 1) % len(MACHINES)
 
         if self.server:
-            print("new connection")
             self.inputs.append(self.server)
     
     
